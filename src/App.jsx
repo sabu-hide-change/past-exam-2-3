@@ -1,15 +1,36 @@
-import React, { useState } from 'react';
-import { AlertCircle, CheckCircle, Calculator, ChevronRight, ChevronLeft, RotateCcw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { 
+  AlertCircle, 
+  CheckCircle, 
+  Calculator, 
+  ChevronRight, 
+  ChevronLeft, 
+  RotateCcw, 
+  Home,
+  BookOpen,
+  XCircle,
+  Bookmark
+} from 'lucide-react';
 
 const QuizApp = () => {
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [selectedAnswers, setSelectedAnswers] = useState({});
-  const [showResult, setShowResult] = useState(false);
+  // --- State ---
+  const [screen, setScreen] = useState('menu'); // menu, quiz, result
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [activeQuestions, setActiveQuestions] = useState([]); // 現在出題中の問題リスト
+  const [selectedAnswers, setSelectedAnswers] = useState({}); // 今の回の回答
   const [showExplanation, setShowExplanation] = useState(false);
+  
+  // 履歴データ（ローカルストレージから読み込み）
+  const [history, setHistory] = useState(() => {
+    const saved = localStorage.getItem('quizHistory_2_3');
+    return saved ? JSON.parse(saved) : {};
+  });
 
-  const quizData = [
+  // --- Data ---
+  const originalQuizData = [
     {
       id: 1,
+      year: "令和元年 第8問",
       category: "税効果会計",
       question: "期首に取得した備品1,200千円（耐用4年、残存0、定額法）について、税法上の耐用年数は6年であった。このとき計上される繰延税金資産または負債はいくらか。なお実効税率は30％とする。",
       data: [
@@ -45,6 +66,7 @@ const QuizApp = () => {
     },
     {
       id: 2,
+      year: "平成29年 第6問",
       category: "税効果会計の記述",
       question: "税効果会計に関する記述として、最も適切なものはどれか。",
       options: [
@@ -65,6 +87,7 @@ const QuizApp = () => {
     },
     {
       id: 3,
+      year: "平成26年 第3問",
       category: "評価性引当額",
       question: "税効果会計における評価性引当額に関する記述として、最も適切なものはどれか。",
       options: [
@@ -86,6 +109,7 @@ const QuizApp = () => {
     },
     {
       id: 4,
+      year: "平成28年 第3問",
       category: "のれん",
       question: "のれんに関する記述として最も適切なものはどれか。",
       options: [
@@ -107,6 +131,7 @@ const QuizApp = () => {
     },
     {
       id: 5,
+      year: "令和元年 第3問",
       category: "連結会計の基礎",
       question: "連結会計に関する記述として、最も適切なものはどれか。",
       options: [
@@ -128,6 +153,7 @@ const QuizApp = () => {
     },
     {
       id: 6,
+      year: "令和5年 第4問",
       category: "連結会計のルール",
       question: "連結会計に関する記述として、最も適切なものはどれか。",
       options: [
@@ -149,6 +175,7 @@ const QuizApp = () => {
     },
     {
       id: 7,
+      year: "平成30年 第4問",
       category: "買収会計（のれん計算）",
       question: "A社はB社株式の80％を85百万円で取得した。取得時における「のれん」と「非支配株主持分」の金額の組み合わせとして、最も適切なものはどれか。",
       data: [
@@ -192,6 +219,7 @@ const QuizApp = () => {
     },
     {
       id: 8,
+      year: "平成30年 第3問",
       category: "本支店会計（未達なし）",
       question: "月末時点における「本店」の帳簿上の「支店勘定」の残高はいくらか。なお、月初の残高はゼロとする。",
       data: [
@@ -230,6 +258,7 @@ const QuizApp = () => {
     },
     {
       id: 9,
+      year: "令和3年 第2問",
       category: "本店集中計算制度",
       question: "A支店がB支店の買掛金200,000円を小切手で支払ったとき、本店集中計算制度における「本店」の仕訳はどれか。",
       options: [
@@ -258,47 +287,96 @@ const QuizApp = () => {
     }
   ];
 
+  // --- Effects ---
+  // 履歴更新時にローカルストレージに保存
+  useEffect(() => {
+    localStorage.setItem('quizHistory_2_3', JSON.stringify(history));
+  }, [history]);
+
+  // --- Logic ---
+  
+  // クイズ開始処理
+  const startQuiz = (mode) => {
+    let questions = [];
+    if (mode === 'all') {
+      questions = originalQuizData;
+    } else if (mode === 'wrong') {
+      questions = originalQuizData.filter(q => history[q.id]?.lastResult === 'incorrect');
+    } else if (mode === 'review') {
+      questions = originalQuizData.filter(q => history[q.id]?.reviewNeeded);
+    }
+
+    if (questions.length === 0) {
+      alert("該当する問題がありません！");
+      return;
+    }
+
+    setActiveQuestions(questions);
+    setCurrentQuestionIndex(0);
+    setSelectedAnswers({});
+    setShowExplanation(false);
+    setScreen('quiz');
+  };
+
   const handleAnswerSelect = (optionIndex) => {
+    const currentQ = activeQuestions[currentQuestionIndex];
+    const isCorrect = optionIndex === currentQ.correctAnswer;
+    
     setSelectedAnswers({
       ...selectedAnswers,
-      [currentQuestion]: optionIndex
+      [currentQ.id]: optionIndex
     });
+
+    // 履歴更新（回答した瞬間に正誤を記録）
+    setHistory(prev => ({
+      ...prev,
+      [currentQ.id]: {
+        ...prev[currentQ.id],
+        lastResult: isCorrect ? 'correct' : 'incorrect',
+        lastAnsweredAt: new Date().toISOString()
+      }
+    }));
+    
     setShowExplanation(true);
   };
 
+  const toggleReview = (questionId) => {
+    setHistory(prev => ({
+      ...prev,
+      [questionId]: {
+        ...prev[questionId],
+        reviewNeeded: !prev[questionId]?.reviewNeeded
+      }
+    }));
+  };
+
   const handleNext = () => {
-    if (currentQuestion < quizData.length - 1) {
-      setCurrentQuestion(currentQuestion + 1);
+    if (currentQuestionIndex < activeQuestions.length - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1);
       setShowExplanation(false);
     } else {
-      setShowResult(true);
+      setScreen('result');
     }
   };
 
   const handlePrevious = () => {
-    if (currentQuestion > 0) {
-      setCurrentQuestion(currentQuestion - 1);
-      setShowExplanation(selectedAnswers[currentQuestion - 1] !== undefined);
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(currentQuestionIndex - 1);
+      // 前の問題に戻るとき、すでに回答済みなら解説を表示
+      const prevQId = activeQuestions[currentQuestionIndex - 1].id;
+      setShowExplanation(selectedAnswers[prevQId] !== undefined);
     }
-  };
-
-  const restartQuiz = () => {
-    setCurrentQuestion(0);
-    setSelectedAnswers({});
-    setShowResult(false);
-    setShowExplanation(false);
   };
 
   const calculateScore = () => {
     let score = 0;
-    Object.keys(selectedAnswers).forEach((key) => {
-      if (selectedAnswers[key] === quizData[key].correctAnswer) {
-        score++;
-      }
+    activeQuestions.forEach(q => {
+      if (selectedAnswers[q.id] === q.correctAnswer) score++;
     });
     return score;
   };
 
+  // --- Render Helpers ---
   const renderTable = (tableData) => {
     if (!tableData) return null;
     return (
@@ -325,181 +403,321 @@ const QuizApp = () => {
     );
   };
 
-  if (showResult) {
-    const score = calculateScore();
+  // --- Screens ---
+
+  // 1. Menu Screen
+  if (screen === 'menu') {
     return (
-      <div className="w-full max-w-2xl mx-auto mt-8 bg-white rounded-lg shadow-lg overflow-hidden">
-        <div className="bg-blue-600 text-white p-6">
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <CheckCircle className="h-6 w-6" />
-            結果発表
-          </h2>
-        </div>
-        <div className="p-6">
-          <div className="text-center mb-8">
-            <h2 className="text-4xl font-bold text-gray-800 mb-2">{score} / {quizData.length}</h2>
-            <p className="text-gray-600">正解率: {Math.round((score / quizData.length) * 100)}%</p>
+      <div className="min-h-screen bg-gray-50 py-8 px-4 font-sans text-gray-800">
+        <div className="w-full max-w-4xl mx-auto bg-white rounded-xl shadow-xl overflow-hidden">
+          <div className="bg-blue-600 p-6 text-white">
+            <h1 className="text-2xl font-bold mb-2">過去問セレクト演習 2-3</h1>
+            <p className="opacity-90">税務・結合会計</p>
           </div>
-          <div className="space-y-4">
-            {quizData.map((q, index) => (
-              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded border">
-                <span className="font-medium text-sm text-gray-700">問{index + 1}: {q.category}</span>
-                {selectedAnswers[index] === q.correctAnswer ? (
-                  <span className="text-green-600 font-bold flex items-center"><CheckCircle className="h-4 w-4 mr-1" />正解</span>
-                ) : (
-                  <span className="text-red-500 font-bold flex items-center"><AlertCircle className="h-4 w-4 mr-1" />不正解</span>
-                )}
-              </div>
-            ))}
+          
+          <div className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              <button 
+                onClick={() => startQuiz('all')}
+                className="flex flex-col items-center justify-center p-6 bg-blue-50 border-2 border-blue-200 rounded-xl hover:bg-blue-100 transition-colors"
+              >
+                <BookOpen className="w-8 h-8 text-blue-600 mb-2" />
+                <span className="font-bold text-lg">全問チャレンジ</span>
+                <span className="text-sm text-gray-500 mt-1">全{originalQuizData.length}問</span>
+              </button>
+
+              <button 
+                onClick={() => startQuiz('wrong')}
+                className="flex flex-col items-center justify-center p-6 bg-red-50 border-2 border-red-200 rounded-xl hover:bg-red-100 transition-colors"
+              >
+                <XCircle className="w-8 h-8 text-red-600 mb-2" />
+                <span className="font-bold text-lg">前回不正解のみ</span>
+                <span className="text-sm text-gray-500 mt-1">
+                  対象: {originalQuizData.filter(q => history[q.id]?.lastResult === 'incorrect').length}問
+                </span>
+              </button>
+
+              <button 
+                onClick={() => startQuiz('review')}
+                className="flex flex-col items-center justify-center p-6 bg-yellow-50 border-2 border-yellow-200 rounded-xl hover:bg-yellow-100 transition-colors"
+              >
+                <Bookmark className="w-8 h-8 text-yellow-600 mb-2" />
+                <span className="font-bold text-lg">要復習のみ</span>
+                <span className="text-sm text-gray-500 mt-1">
+                  対象: {originalQuizData.filter(q => history[q.id]?.reviewNeeded).length}問
+                </span>
+              </button>
+            </div>
+
+            <h3 className="font-bold text-lg mb-4 text-gray-700 border-l-4 border-blue-600 pl-3">問題一覧・履歴</h3>
+            <div className="overflow-x-auto">
+              <table className="min-w-full border text-sm">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="border p-2 w-12 text-center">No</th>
+                    <th className="border p-2">問題カテゴリ / 出題年度</th>
+                    <th className="border p-2 w-24 text-center">前回</th>
+                    <th className="border p-2 w-24 text-center">要復習</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {originalQuizData.map((q, idx) => {
+                    const h = history[q.id] || {};
+                    return (
+                      <tr key={q.id} className="hover:bg-gray-50">
+                        <td className="border p-2 text-center font-bold text-gray-600">{idx + 1}</td>
+                        <td className="border p-2">
+                          <div className="font-bold text-gray-800">{q.category}</div>
+                          <div className="text-xs text-gray-500">【{q.year}】</div>
+                        </td>
+                        <td className="border p-2 text-center">
+                          {h.lastResult === 'correct' && <span className="text-green-600 font-bold">〇</span>}
+                          {h.lastResult === 'incorrect' && <span className="text-red-500 font-bold">×</span>}
+                          {!h.lastResult && <span className="text-gray-300">-</span>}
+                        </td>
+                        <td className="border p-2 text-center">
+                          <button 
+                            onClick={() => toggleReview(q.id)}
+                            className="focus:outline-none"
+                          >
+                            {h.reviewNeeded ? (
+                              <Bookmark className="w-5 h-5 text-yellow-500 fill-current mx-auto" />
+                            ) : (
+                              <Bookmark className="w-5 h-5 text-gray-300 mx-auto" />
+                            )}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-        <div className="flex justify-center p-6 bg-gray-50">
-          <button 
-            onClick={restartQuiz} 
-            className="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-md transition-colors w-full md:w-auto"
-          >
-            <RotateCcw className="mr-2 h-4 w-4" /> もう一度挑戦する
-          </button>
         </div>
       </div>
     );
   }
 
-  const currentQ = quizData[currentQuestion];
-  const isAnswered = selectedAnswers[currentQuestion] !== undefined;
-  const isCorrect = selectedAnswers[currentQuestion] === currentQ.correctAnswer;
+  // 2. Quiz Screen
+  if (screen === 'quiz') {
+    const currentQ = activeQuestions[currentQuestionIndex];
+    const isAnswered = selectedAnswers[currentQ.id] !== undefined;
+    const isCorrect = selectedAnswers[currentQ.id] === currentQ.correctAnswer;
+    const reviewNeeded = history[currentQ.id]?.reviewNeeded || false;
 
-  return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 font-sans text-gray-800">
-      <div className="w-full max-w-3xl mx-auto bg-white rounded-xl shadow-xl overflow-hidden">
-        <div className="bg-white border-b sticky top-0 z-10 p-6">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-sm font-semibold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
-              問題 {currentQuestion + 1} / {quizData.length}
-            </span>
-            <span className="text-sm text-gray-500">{currentQ.category}</span>
+    return (
+      <div className="min-h-screen bg-gray-50 py-8 px-4 font-sans text-gray-800">
+        <div className="w-full max-w-3xl mx-auto bg-white rounded-xl shadow-xl overflow-hidden">
+          {/* Header */}
+          <div className="bg-white border-b sticky top-0 z-10 p-4 shadow-sm flex justify-between items-center">
+            <button onClick={() => setScreen('menu')} className="text-gray-500 hover:text-gray-700">
+              <Home className="w-5 h-5" />
+            </button>
+            <div className="text-center">
+              <span className="text-sm font-semibold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+                問 {currentQuestionIndex + 1} / {activeQuestions.length}
+              </span>
+            </div>
+            <div className="w-5" /> {/* Spacer */}
           </div>
-          <div className="w-full bg-gray-200 h-2 rounded-full mt-2">
+          <div className="w-full bg-gray-200 h-1">
             <div 
-              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${((currentQuestion + 1) / quizData.length) * 100}%` }}
+              className="bg-blue-600 h-1 transition-all duration-300"
+              style={{ width: `${((currentQuestionIndex + 1) / activeQuestions.length) * 100}%` }}
             ></div>
           </div>
-        </div>
 
-        <div className="p-6">
-          <div className="mb-6">
-            <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-start">
-              <span className="bg-gray-800 text-white text-xs px-2 py-1 rounded mr-2 mt-1 shrink-0">問</span>
-              {currentQ.question}
-            </h2>
-            
-            {currentQ.data && (
-              <div className="bg-gray-50 p-4 rounded-md border border-gray-200 mb-4 text-sm text-gray-700">
-                <h3 className="font-bold mb-2">【資 料】</h3>
-                <ul className="list-disc pl-5 space-y-1">
-                  {currentQ.data.map((item, idx) => (
-                    <li key={idx}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
+          <div className="p-6">
+            {/* Question */}
+            <div className="mb-6">
+              <h2 className="text-lg font-bold text-gray-800 mb-2 leading-relaxed">
+                <span className="bg-gray-800 text-white text-xs px-2 py-1 rounded mr-2 align-middle">
+                  {currentQ.year}
+                </span>
+                {currentQ.question}
+              </h2>
+              
+              {currentQ.data && (
+                <div className="bg-gray-50 p-4 rounded-md border border-gray-200 mb-4 text-sm text-gray-700 mt-4">
+                  <h3 className="font-bold mb-2">【資 料】</h3>
+                  <ul className="list-disc pl-5 space-y-1">
+                    {currentQ.data.map((item, idx) => (
+                      <li key={idx}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {renderTable(currentQ.table)}
+            </div>
 
-            {renderTable(currentQ.table)}
-          </div>
+            {/* Options */}
+            <div className="space-y-3">
+              {currentQ.options.map((option, index) => (
+                <label 
+                  key={index} 
+                  className={`flex items-center p-4 rounded-lg border-2 cursor-pointer transition-all
+                    ${!isAnswered ? 'hover:bg-blue-50 hover:border-blue-200' : ''}
+                    ${selectedAnswers[currentQ.id] === index 
+                      ? (index === currentQ.correctAnswer 
+                        ? 'bg-green-50 border-green-500' 
+                        : 'bg-red-50 border-red-500')
+                      : (isAnswered && index === currentQ.correctAnswer 
+                        ? 'bg-green-50 border-green-500' 
+                        : 'border-gray-200 bg-white')
+                    }
+                  `}
+                >
+                  <input 
+                    type="radio" 
+                    name={`question-${currentQ.id}`} 
+                    checked={selectedAnswers[currentQ.id] === index}
+                    onChange={() => !isAnswered && handleAnswerSelect(index)}
+                    disabled={isAnswered}
+                    className="sr-only" 
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-base font-medium w-full">{option}</span>
+                      {isAnswered && index === currentQ.correctAnswer && (
+                        <CheckCircle className="h-5 w-5 text-green-600 shrink-0 ml-2" />
+                      )}
+                      {isAnswered && selectedAnswers[currentQ.id] === index && index !== currentQ.correctAnswer && (
+                        <AlertCircle className="h-5 w-5 text-red-500 shrink-0 ml-2" />
+                      )}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
 
-          <div className="space-y-3">
-            {currentQ.options.map((option, index) => (
-              <label 
-                key={index} 
-                className={`flex items-center p-4 rounded-lg border-2 cursor-pointer transition-all
-                  ${!isAnswered ? 'hover:bg-blue-50 hover:border-blue-200' : ''}
-                  ${selectedAnswers[currentQuestion] === index 
-                    ? (index === currentQ.correctAnswer 
-                      ? 'bg-green-50 border-green-500' 
-                      : 'bg-red-50 border-red-500')
-                    : (isAnswered && index === currentQ.correctAnswer 
-                      ? 'bg-green-50 border-green-500' 
-                      : 'border-gray-200 bg-white')
-                  }
-                `}
-              >
-                <input 
-                  type="radio" 
-                  name={`question-${currentQuestion}`} 
-                  value={index} 
-                  checked={selectedAnswers[currentQuestion] === index}
-                  onChange={() => !isAnswered && handleAnswerSelect(index)}
-                  disabled={isAnswered}
-                  className="sr-only" 
-                />
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-base font-medium w-full">{option}</span>
-                    {isAnswered && index === currentQ.correctAnswer && (
-                      <CheckCircle className="h-5 w-5 text-green-600" />
-                    )}
-                    {isAnswered && selectedAnswers[currentQuestion] === index && index !== currentQ.correctAnswer && (
-                      <AlertCircle className="h-5 w-5 text-red-500" />
-                    )}
+            {/* Explanation */}
+            {showExplanation && (
+              <div className="mt-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className={`mb-4 p-4 rounded-lg border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${isCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                  <div className="flex items-center gap-3">
+                    {isCorrect ? <CheckCircle className="h-6 w-6 text-green-600" /> : <AlertCircle className="h-6 w-6 text-red-600" />}
+                    <div>
+                      <h4 className={`font-bold text-lg ${isCorrect ? 'text-green-800' : 'text-red-800'}`}>
+                        {isCorrect ? '正解！' : '不正解...'}
+                      </h4>
+                      <p className="text-gray-700 text-sm">
+                        正解は <strong>{currentQ.options[currentQ.correctAnswer]}</strong> です。
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Review Checkbox */}
+                  <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded border border-gray-300 hover:bg-gray-50">
+                    <input 
+                      type="checkbox" 
+                      checked={reviewNeeded}
+                      onChange={() => toggleReview(currentQ.id)}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-bold text-gray-700">要復習リストに入れる</span>
+                  </label>
+                </div>
+
+                <div className="bg-slate-50 p-5 rounded-lg border border-slate-200">
+                  <div className="flex items-center gap-2 mb-3 text-slate-800 font-bold border-b border-slate-200 pb-2">
+                    <Calculator className="h-5 w-5" />
+                    解説
+                  </div>
+                  <div className="mb-4">
+                    <span className="inline-block bg-yellow-100 text-yellow-800 text-xs font-bold px-2 py-1 rounded mb-2">
+                      ここが重要
+                    </span>
+                    <p className="text-sm text-gray-700 font-medium">{currentQ.explanation.important}</p>
+                  </div>
+                  <div className="text-sm text-gray-600 whitespace-pre-line leading-relaxed font-mono bg-white p-3 rounded border border-gray-100">
+                    {currentQ.explanation.content}
                   </div>
                 </div>
-              </label>
-            ))}
+              </div>
+            )}
           </div>
 
-          {showExplanation && (
-            <div className="mt-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className={`mb-4 p-4 rounded-lg border flex items-start gap-3 ${isCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-                {isCorrect ? <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" /> : <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />}
-                <div>
-                  <h4 className={`font-bold ${isCorrect ? 'text-green-800' : 'text-red-800'}`}>
-                    {isCorrect ? '正解！' : '不正解...'}
-                  </h4>
-                  <p className="text-gray-700 text-sm mt-1">
-                    正解は <strong>{currentQ.options[currentQ.correctAnswer]}</strong> です。
-                  </p>
-                </div>
-              </div>
-
-              <div className="bg-slate-50 p-5 rounded-lg border border-slate-200">
-                <div className="flex items-center gap-2 mb-3 text-slate-800 font-bold border-b border-slate-200 pb-2">
-                  <Calculator className="h-5 w-5" />
-                  解説
-                </div>
-                <div className="mb-4">
-                  <span className="inline-block bg-yellow-100 text-yellow-800 text-xs font-bold px-2 py-1 rounded mb-2">
-                    ここが重要
-                  </span>
-                  <p className="text-sm text-gray-700 font-medium">{currentQ.explanation.important}</p>
-                </div>
-                <div className="text-sm text-gray-600 whitespace-pre-line leading-relaxed font-mono bg-white p-3 rounded border border-gray-100">
-                  {currentQ.explanation.content}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="flex justify-between p-6 bg-gray-50 border-t">
-          <button 
-            onClick={handlePrevious} 
-            disabled={currentQuestion === 0}
-            className="flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <ChevronLeft className="mr-2 h-4 w-4" /> 前へ
-          </button>
-          <button 
-            onClick={handleNext} 
-            disabled={!isAnswered}
-            className="flex items-center px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {currentQuestion === quizData.length - 1 ? '結果へ' : '次へ'} <ChevronRight className="ml-2 h-4 w-4" />
-          </button>
+          <div className="flex justify-between p-6 bg-gray-50 border-t">
+            <button 
+              onClick={handlePrevious} 
+              disabled={currentQuestionIndex === 0}
+              className="flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="mr-2 h-4 w-4" /> 前へ
+            </button>
+            <button 
+              onClick={handleNext} 
+              disabled={!isAnswered}
+              className="flex items-center px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {currentQuestionIndex === activeQuestions.length - 1 ? '結果へ' : '次へ'} <ChevronRight className="ml-2 h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  // 3. Result Screen
+  if (screen === 'result') {
+    const score = calculateScore();
+    return (
+      <div className="min-h-screen bg-gray-50 py-8 px-4 font-sans text-gray-800">
+        <div className="w-full max-w-2xl mx-auto bg-white rounded-lg shadow-lg overflow-hidden">
+          <div className="bg-blue-600 text-white p-6">
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <CheckCircle className="h-6 w-6" />
+              結果発表
+            </h2>
+          </div>
+          <div className="p-6">
+            <div className="text-center mb-8">
+              <h2 className="text-4xl font-bold text-gray-800 mb-2">{score} / {activeQuestions.length}</h2>
+              <p className="text-gray-600">正解率: {Math.round((score / activeQuestions.length) * 100)}%</p>
+            </div>
+            <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+              {activeQuestions.map((q, index) => {
+                const isCorrect = selectedAnswers[q.id] === q.correctAnswer;
+                return (
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded border">
+                    <div className="flex-1">
+                      <div className="text-xs text-gray-500 mb-1">【{q.year}】</div>
+                      <span className="font-medium text-sm text-gray-700 line-clamp-1">問{index + 1}: {q.category}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {isCorrect ? (
+                        <span className="text-green-600 font-bold flex items-center shrink-0"><CheckCircle className="h-4 w-4 mr-1" />正解</span>
+                      ) : (
+                        <span className="text-red-500 font-bold flex items-center shrink-0"><AlertCircle className="h-4 w-4 mr-1" />不正解</span>
+                      )}
+                      
+                      {/* Result Screen Review Toggle */}
+                      <button onClick={() => toggleReview(q.id)} className="focus:outline-none" title="要復習リストに追加/解除">
+                         {history[q.id]?.reviewNeeded ? (
+                            <Bookmark className="w-5 h-5 text-yellow-500 fill-current" />
+                          ) : (
+                            <Bookmark className="w-5 h-5 text-gray-300" />
+                          )}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex justify-center p-6 bg-gray-50 border-t">
+            <button 
+              onClick={() => setScreen('menu')} 
+              className="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-md transition-colors w-full md:w-auto"
+            >
+              <RotateCcw className="mr-2 h-4 w-4" /> メニューに戻る
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 };
 
 export default QuizApp;
